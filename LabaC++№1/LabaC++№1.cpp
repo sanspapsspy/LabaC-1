@@ -1,16 +1,15 @@
 ﻿#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
+#include <direct.h>
 #include <locale.h>
+#include <string.h>
 
-// Функция для вывода информации о состоянии файлового указателя
-// Используем переносимые методы вместо прямого доступа к полям FILE*
 void print_file_state(FILE* fp, const char* stage) {
     if (!fp) return;
 
     printf("\n=== Состояние файла (%s) ===\n", stage);
 
-    // Текущая позиция в файле
     long pos = ftell(fp);
     if (pos != -1) {
         printf("Текущая позиция: %ld байт\n", pos);
@@ -19,14 +18,8 @@ void print_file_state(FILE* fp, const char* stage) {
         perror("ftell");
     }
 
-    // Дескриптор файла (используем _fileno в Windows, fileno в Linux)
-#ifdef _WIN32
     printf("Дескриптор файла: %d\n", _fileno(fp));
-#else
-    printf("Дескриптор файла: %d\n", fileno(fp));
-#endif
 
-    // Проверка флагов ошибок и конца файла
     clearerr(fp);
     if (feof(fp)) {
         printf("Флаг EOF: УСТАНОВЛЕН\n");
@@ -45,17 +38,57 @@ void print_file_state(FILE* fp, const char* stage) {
     printf("==========================\n");
 }
 
+void show_usage(const char* program_name) {
+    printf("Использование:\n");
+    printf("  %s <имя_файла>              - создать файл и выполнить все операции\n", program_name);
+    printf("  %s rename <старое> <новое>  - переименовать файл\n", program_name);
+    printf("  %s help                     - показать эту справку\n", program_name);
+}
+
 int main(int argc, char* argv[]) {
-    setlocale(LC_ALL, ("ru"));
-    // Проверка аргументов командной строки
-    if (argc != 2) {
-        fprintf(stderr, "Использование: %s <имя_файла>\n", argv[0]);
+    setlocale(LC_ALL, "Russian");
+
+    if (argc < 2) {
+        show_usage(argv[0]);
         return 1;
     }
 
-    const char* filename = argv[1];
+    if (strcmp(argv[1], "help") == 0) {
+        show_usage(argv[0]);
+        return 0;
+    }
 
-    // Последовательность байт для записи: 3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5
+    if (strcmp(argv[1], "rename") == 0) {
+        if (argc != 4) {
+            printf("Ошибка: для переименования нужно указать старое и новое имя файла\n");
+            printf("Пример: %s rename oldfile.bin newfile.bin\n", argv[0]);
+            return 1;
+        }
+
+        if (rename(argv[2], argv[3]) == 0) {
+            printf("Файл успешно переименован\n");
+            printf("Старое имя: %s\n", argv[2]);
+            printf("Новое имя: %s\n", argv[3]);
+        }
+        else {
+            perror("Ошибка переименования файла");
+        }
+        return 0;
+    }
+
+    char cwd[1024];
+    if (_getcwd(cwd, sizeof(cwd)) != NULL) {
+        printf("========================================\n");
+        printf("Текущая рабочая папка: %s\n", cwd);
+        printf("========================================\n\n");
+    }
+    else {
+        perror("Ошибка получения текущей папки");
+    }
+
+    const char* filename = argv[1];
+    printf("Файл будет создан/открыт по пути: %s\\%s\n\n", cwd, filename);
+
     unsigned char data[] = { 3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5 };
     size_t data_size = sizeof(data);
 
@@ -63,7 +96,6 @@ int main(int argc, char* argv[]) {
     printf("ЗАДАНИЕ 1: РАБОТА С FILE*, FSEEK, FREAD\n");
     printf("========================================\n\n");
 
-    // ========== ЧАСТЬ 1: СОЗДАНИЕ И ЗАПИСЬ ФАЙЛА ==========
     printf("ЧАСТЬ 1: Создание файла и запись данных\n");
     printf("----------------------------------------\n");
 
@@ -73,9 +105,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    printf("\nФайл успешно открыт: %s\n", filename);
     print_file_state(fp, "после открытия на запись");
 
-    // Запись данных в файл
     size_t written = fwrite(data, 1, data_size, fp);
     if (written != data_size) {
         perror("Ошибка записи в файл");
@@ -92,9 +124,9 @@ int main(int argc, char* argv[]) {
     print_file_state(fp, "после записи данных");
 
     fclose(fp);
-    printf("\nФайл закрыт.\n\n");
+    printf("\nФайл закрыт.\n");
+    printf("Файл сохранен по пути: %s\\%s\n\n", cwd, filename);
 
-    // ========== ЧАСТЬ 2: ПОБАЙТОВОЕ ЧТЕНИЕ ==========
     printf("ЧАСТЬ 2: Побайтовое чтение файла\n");
     printf("--------------------------------\n");
 
@@ -103,6 +135,8 @@ int main(int argc, char* argv[]) {
         perror("Ошибка открытия файла для чтения");
         return 1;
     }
+
+    printf("\nФайл успешно открыт для чтения: %s\n", filename);
 
     int ch;
     int byte_count = 0;
@@ -117,7 +151,6 @@ int main(int argc, char* argv[]) {
     fclose(fp);
     printf("\nФайл закрыт.\n\n");
 
-    // ========== ЧАСТЬ 3: FSEEK + FREAD ==========
     printf("ЧАСТЬ 3: Перемещение указателя и чтение 4 байт\n");
     printf("--------------------------------------------\n");
 
@@ -127,9 +160,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    printf("\nФайл успешно открыт: %s\n", filename);
     print_file_state(fp, "после открытия");
 
-    // Перемещаем указатель на 3 байта от начала файла
     printf("\nВыполняется fseek(fp, 3, SEEK_SET)...\n");
     if (fseek(fp, 3, SEEK_SET) != 0) {
         perror("Ошибка fseek");
@@ -139,14 +172,12 @@ int main(int argc, char* argv[]) {
 
     print_file_state(fp, "после fseek(3, SEEK_SET)");
 
-    // Читаем 4 байта в буфер
     unsigned char buffer[4];
     size_t bytes_read = fread(buffer, 1, 4, fp);
 
     printf("\nПосле fread:\n");
     print_file_state(fp, "после чтения 4 байт");
 
-    // Вывод содержимого буфера
     printf("\nРезультат fread:\n");
     printf("Прочитано байт: %zu\n", bytes_read);
     printf("Содержимое буфера: ");
@@ -157,7 +188,6 @@ int main(int argc, char* argv[]) {
 
     fclose(fp);
 
-    // ========== ОТВЕТ НА ВОПРОС ЗАДАНИЯ ==========
     printf("\n========================================\n");
     printf("ОТВЕТ НА ВОПРОС ЗАДАНИЯ\n");
     printf("========================================\n");
@@ -175,6 +205,15 @@ int main(int argc, char* argv[]) {
     printf("Буфер будет содержать байты с индексов 3, 4, 5, 6: ");
     printf("%d, %d, %d, %d\n", data[3], data[4], data[5], data[6]);
     printf("То есть: 1, 5, 9, 2\n");
+
+    printf("\n========================================\n");
+    printf("Файл находится по адресу: %s\\%s\n", cwd, filename);
+    printf("========================================\n");
+
+    printf("\n----------------------------------------\n");
+    printf("ДЛЯ ПЕРЕИМЕНОВАНИЯ ФАЙЛА:\n");
+    printf("Используйте команду: %s rename %s новое_имя\n", argv[0], filename);
+    printf("----------------------------------------\n");
 
     return 0;
 }
