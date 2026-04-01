@@ -1,0 +1,10 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="LabaC++№1/LabaC++№1.vcxproj" Id="1adf2faa-938f-4157-b4da-819121b49507" />
+  <Project Path="Task2/Task2.vcxproj" Id="36d076fb-e5db-4dce-a8df-ed7bf6e273f2" />
+  <Project Path="Task3/Task3.vcxproj" Id="5c174b33-308a-4828-aa58-1579217cb037" />
+  <Project Path="Task4/Task4.vcxproj" Id="2279e130-7803-4672-a827-53a52d7ce79e" />
+</Solution>
