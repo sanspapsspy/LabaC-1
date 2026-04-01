@@ -1,112 +1,180 @@
-﻿#include <iostream>
-#include <fstream>
-#include <vector>
-#include <cstdint>
-#include <memory>
+﻿#define _CRT_SECURE_NO_WARNINGS
+#include <stdio.h>
+#include <stdlib.h>
+#include <locale.h>
+
+// Функция для вывода информации о состоянии файлового указателя
+// Используем переносимые методы вместо прямого доступа к полям FILE*
+void print_file_state(FILE* fp, const char* stage) {
+    if (!fp) return;
+
+    printf("\n=== Состояние файла (%s) ===\n", stage);
+
+    // Текущая позиция в файле
+    long pos = ftell(fp);
+    if (pos != -1) {
+        printf("Текущая позиция: %ld байт\n", pos);
+    }
+    else {
+        perror("ftell");
+    }
+
+    // Дескриптор файла (используем _fileno в Windows, fileno в Linux)
+#ifdef _WIN32
+    printf("Дескриптор файла: %d\n", _fileno(fp));
+#else
+    printf("Дескриптор файла: %d\n", fileno(fp));
+#endif
+
+    // Проверка флагов ошибок и конца файла
+    clearerr(fp);
+    if (feof(fp)) {
+        printf("Флаг EOF: УСТАНОВЛЕН\n");
+    }
+    else {
+        printf("Флаг EOF: СБРОШЕН\n");
+    }
+
+    if (ferror(fp)) {
+        printf("Флаг ошибки: УСТАНОВЛЕН\n");
+    }
+    else {
+        printf("Флаг ошибки: СБРОШЕН\n");
+    }
+
+    printf("==========================\n");
+}
 
 int main(int argc, char* argv[]) {
+    setlocale(LC_ALL, ("ru"));
+    // Проверка аргументов командной строки
     if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " <file_path>" << std::endl;
-        return EXIT_FAILURE;
+        fprintf(stderr, "Использование: %s <имя_файла>\n", argv[0]);
+        return 1;
     }
 
-    const char* file_path = argv[1];
-    const std::vector<uint8_t> data = {3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5};
+    const char* filename = argv[1];
 
-    // Создание и запись файла
-    std::ofstream out_file(file_path, std::ios::binary);
-    if (!out_file) {
-        std::cerr << "Failed to create file: " << file_path << std::endl;
-        return EXIT_FAILURE;
+    // Последовательность байт для записи: 3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5
+    unsigned char data[] = { 3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5 };
+    size_t data_size = sizeof(data);
+
+    printf("========================================\n");
+    printf("ЗАДАНИЕ 1: РАБОТА С FILE*, FSEEK, FREAD\n");
+    printf("========================================\n\n");
+
+    // ========== ЧАСТЬ 1: СОЗДАНИЕ И ЗАПИСЬ ФАЙЛА ==========
+    printf("ЧАСТЬ 1: Создание файла и запись данных\n");
+    printf("----------------------------------------\n");
+
+    FILE* fp = fopen(filename, "wb");
+    if (!fp) {
+        perror("Ошибка открытия файла для записи");
+        return 1;
     }
 
-    out_file.write(reinterpret_cast<const char*>(data.data()), data.size());
-    if (!out_file) {
-        std::cerr << "Failed to write all data" << std::endl;
-        return EXIT_FAILURE;
-    }
-    out_file.close();
+    print_file_state(fp, "после открытия на запись");
 
-    // Чтение файла с побайтовым выводом
-    std::ifstream in_file(file_path, std::ios::binary);
-    if (!in_file) {
-        std::cerr << "Failed to open file for reading: " << file_path << std::endl;
-        return EXIT_FAILURE;
+    // Запись данных в файл
+    size_t written = fwrite(data, 1, data_size, fp);
+    if (written != data_size) {
+        perror("Ошибка записи в файл");
+        fclose(fp);
+        return 1;
     }
 
-    std::cout << "Reading file byte by byte:" << std::endl;
-    std::cout << "================================" << std::endl;
+    printf("\nЗаписано %zu байт: ", written);
+    for (size_t i = 0; i < data_size; i++) {
+        printf("%d ", data[i]);
+    }
+    printf("\n");
 
-    char byte;
-    size_t pos = 0;
-    while (in_file.get(byte)) {
-        std::cout << "Byte " << std::setw(2) << pos++ << ": " 
-                  << static_cast<int>(static_cast<uint8_t>(byte)) 
-                  << " (0x" << std::hex << std::setw(2) << std::setfill('0')
-                  << static_cast<int>(static_cast<uint8_t>(byte)) << ")" << std::dec << std::endl;
-        
-        // Вывод состояния потока
-        std::cout << "  Stream state:" << std::endl;
-        std::cout << "    eof flag: " << in_file.eof() << std::endl;
-        std::cout << "    fail flag: " << in_file.fail() << std::endl;
-        std::cout << "    bad flag: " << in_file.bad() << std::endl;
-        std::cout << "    Current position: " << in_file.tellg() << std::endl;
-        std::cout << "  -------------------------" << std::endl;
+    print_file_state(fp, "после записи данных");
+
+    fclose(fp);
+    printf("\nФайл закрыт.\n\n");
+
+    // ========== ЧАСТЬ 2: ПОБАЙТОВОЕ ЧТЕНИЕ ==========
+    printf("ЧАСТЬ 2: Побайтовое чтение файла\n");
+    printf("--------------------------------\n");
+
+    fp = fopen(filename, "rb");
+    if (!fp) {
+        perror("Ошибка открытия файла для чтения");
+        return 1;
     }
 
-    std::cout << "\nEnd of file reached. eof: " << in_file.eof() << std::endl;
-    in_file.close();
+    int ch;
+    int byte_count = 0;
 
-    // Повторное открытие и seekg
-    std::cout << "\n=== Second read with seekg ===" << std::endl;
-    in_file.open(file_path, std::ios::binary);
-    if (!in_file) {
-        std::cerr << "Failed to open file for second reading" << std::endl;
-        return EXIT_FAILURE;
+    while ((ch = fgetc(fp)) != EOF) {
+        byte_count++;
+        printf("\n--- Байт %d: %d ---\n", byte_count, ch);
+        print_file_state(fp, "после чтения байта");
     }
 
-    std::cout << "Position before seekg: " << in_file.tellg() << std::endl;
-    
-    in_file.seekg(3, std::ios::beg);
-    if (!in_file) {
-        std::cerr << "seekg failed" << std::endl;
-        return EXIT_FAILURE;
-    }
-    
-    std::cout << "Position after seekg to 3: " << in_file.tellg() << std::endl;
+    printf("\nВсего прочитано байт: %d\n", byte_count);
+    fclose(fp);
+    printf("\nФайл закрыт.\n\n");
 
-    std::vector<uint8_t> buffer(4);
-    in_file.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-    std::streamsize bytes_read = in_file.gcount();
+    // ========== ЧАСТЬ 3: FSEEK + FREAD ==========
+    printf("ЧАСТЬ 3: Перемещение указателя и чтение 4 байт\n");
+    printf("--------------------------------------------\n");
 
-    std::cout << "\nResult of read:" << std::endl;
-    std::cout << "  Bytes requested: " << buffer.size() << std::endl;
-    std::cout << "  Bytes actually read: " << bytes_read << std::endl;
-    std::cout << "  Buffer contents: ";
-    
-    if (bytes_read > 0) {
-        for (std::streamsize i = 0; i < bytes_read; ++i) {
-            std::cout << static_cast<int>(buffer[i]) << " ";
-        }
-        std::cout << std::endl;
-        
-        // Объяснение результата
-        std::cout << "\nAnswer: The buffer contains ";
-        for (std::streamsize i = 0; i < bytes_read; ++i) {
-            std::cout << static_cast<int>(buffer[i]);
-            if (i < bytes_read - 1) std::cout << ", ";
-        }
-        std::cout << " (bytes at positions 3, 4, 5, 6 in the file)" << std::endl;
-    } else {
-        std::cout << "No bytes read" << std::endl;
+    fp = fopen(filename, "rb");
+    if (!fp) {
+        perror("Ошибка открытия файла для повторного чтения");
+        return 1;
     }
 
-    std::cout << "\nState after read:" << std::endl;
-    std::cout << "  Current position: " << in_file.tellg() << std::endl;
-    std::cout << "  eof flag: " << in_file.eof() << std::endl;
-    std::cout << "  fail flag: " << in_file.fail() << std::endl;
+    print_file_state(fp, "после открытия");
 
-    in_file.close();
-    
-    return EXIT_SUCCESS;
+    // Перемещаем указатель на 3 байта от начала файла
+    printf("\nВыполняется fseek(fp, 3, SEEK_SET)...\n");
+    if (fseek(fp, 3, SEEK_SET) != 0) {
+        perror("Ошибка fseek");
+        fclose(fp);
+        return 1;
+    }
+
+    print_file_state(fp, "после fseek(3, SEEK_SET)");
+
+    // Читаем 4 байта в буфер
+    unsigned char buffer[4];
+    size_t bytes_read = fread(buffer, 1, 4, fp);
+
+    printf("\nПосле fread:\n");
+    print_file_state(fp, "после чтения 4 байт");
+
+    // Вывод содержимого буфера
+    printf("\nРезультат fread:\n");
+    printf("Прочитано байт: %zu\n", bytes_read);
+    printf("Содержимое буфера: ");
+    for (size_t i = 0; i < bytes_read; i++) {
+        printf("%d ", buffer[i]);
+    }
+    printf("\n");
+
+    fclose(fp);
+
+    // ========== ОТВЕТ НА ВОПРОС ЗАДАНИЯ ==========
+    printf("\n========================================\n");
+    printf("ОТВЕТ НА ВОПРОС ЗАДАНИЯ\n");
+    printf("========================================\n");
+    printf("После выполнения fseek(fp, 3, SEEK_SET) указатель чтения\n");
+    printf("перемещается на 3 байта от начала файла (индекс 3).\n");
+    printf("Затем fread считывает 4 байта, начиная с этой позиции.\n\n");
+
+    printf("Содержимое файла по байтам (индексы):\n");
+    printf("Индекс: 0   1   2   3   4   5   6   7   8   9   10\n");
+    printf("Байт:   3   1   4   1   5   9   2   6   5   3   5\n");
+    printf("                      ^\n");
+    printf("                      |\n");
+    printf("                 fseek(3) указывает сюда\n\n");
+
+    printf("Буфер будет содержать байты с индексов 3, 4, 5, 6: ");
+    printf("%d, %d, %d, %d\n", data[3], data[4], data[5], data[6]);
+    printf("То есть: 1, 5, 9, 2\n");
+
+    return 0;
 }
